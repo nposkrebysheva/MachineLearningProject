@@ -1,0 +1,97 @@
+
+#Title: "Machine Learning Project""
+author: "Natalia Poskrebysheva"
+date: "February 17, 2019"
+output: html_document
+
+##**Introduction**
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+###1)	Business Understanding 
+The goal of the model is to predict the manner in which participants did barbell lifts (“classe” variable). Classe is a five level factor variable:
+•	exactly according to the specification (Class A)
+•	throwing the elbows to the front (Class B)
+•	lifting the dumbbell only halfway (Class C)
+•	lowering the dumbbell only halfway (Class D) 
+•	throwing the hips to the front (Class E)
+Predictions will be built based on the data of six young male participants aged 20-28 performing one set of ten repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions with accelerometers on the belt, forearm, arm, and dumbell  attached and tracking the data.
+
+###2)	Data  Loading and Understanding 
+
+```{r}
+library(caret)
+library(randomForest)
+library(rpart)
+library(naniar)
+training<-read.csv("C:/Users/PoskreN/Documents/Ecommerce/Training/Machine Learning/Project/pml-training.csv")
+testing<-read.csv("C:/Users/PoskreN/Documents/Ecommerce/Training/Machine Learning/Project/pml-testing.csv")
+
+#Check if training data and testing data has the same variables 
+samevariables <- colnames(training) == colnames(testing)
+colnames(training)[samevariables==FALSE]
+colnames(testing)[samevariables==FALSE]
+```
+```{r}
+#we see that datasets have 2 mismatching variables classe and problem_id
+#now lets look at the data in more detail
+#We notice that data contains 160 variables with some of them having empty fields, NAs and #Div/0!
+```
+###3)	Data Preparation
+
+```{r}
+#We define all fields with missing/incorrect data as N/As
+na.strings<-c("NA", "", "#DIV0!")
+training<-replace_with_na_all(data=training,condition = ~.x %in% na.strings)
+testing<-replace_with_na_all(data=testing,condition = ~.x %in% na.strings)
+#Some of our variables do not have any values so cannot be used as predictor
+#Lets get rid of irrelevant variables that have all NAs and cant be used as predictors
+training1<-training[,colSums(is.na(training)) == 0]
+testing1<-testing[,colSums(is.na(testing)) == 0]
+colnames(training1)
+# "X",  "user_name", "raw_timestamp_part_1" "raw_timestamp_part_2",  "cvtd_timestamp"       "new_window", "num_window"  cant be used as predictors so we remove them
+Rem<- grep("X|name|timestamp|window", colnames(training1), value=F)
+training1 <- training1[,-Rem]
+#we have 19622 observations with 53 variables in training data left
+```
+###4)	Model Building and Evaluation
+Our goal is to predict unordered factor variable(classe) based on a large sample size of 19622 in training data set and 53  variables. The sample size allows us to split the training data set 70%/30% for cross-validation. We will use random forest algorithm for prediction as it is known for its accuracy in predicting multiclasse problems when sample size is large. 
+```{r}
+#split training data into training and testing sets 
+set.seed(3748)
+inTrain <- createDataPartition(training1$classe, p=0.7, list=FALSE)
+trainingM <- training1[inTrain,]
+testingM <- training1[-inTrain,]
+dim(trainingM); dim(testingM)
+```
+```{r}
+#plot data to see how variables differ among classes
+trainingM$classe <- as.factor(trainingM$classe)
+testingM$classe<-as.factor(testingM$classe)
+qplot(trainingM$classe,trainingM$accel_arm_x,data=trainingM, fill=trainingM$classe,geom=c("boxplot"))
+qplot(trainingM$classe,trainingM$accel_dumbbell_x,data=trainingM, fill=trainingM$classe,geom=c("boxplot"))
+qplot(accel_arm_x, accel_arm_y, col=classe, data=trainingM)
+#couldnt really see any specific patterns and clusters on the graph
+```
+```{r}
+#Now lets build random forest model
+modFitRF <- randomForest(trainingM$classe~.,data=trainingM)
+PredRF <- predict(modFitRF, testingM)
+RFsts <- confusionMatrix(PredRF, testingM$classe)
+RFsts
+```
+The model shows high accuracy of 99.44% with Confidence interval of (0.9921 to 0.9961) and out of sample error of 0.0056
+
+```{r}
+#Now we can do prediction on testing dataset
+Predoutcome <- predict(modFitRF, testing1)
+result<-data.frame(Predoutcome)
+result
+
+```
+
